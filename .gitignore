@@ -1,0 +1,15 @@
+# Default ignored files
+/shelf/
+/workspace.xml
+# Datasource local storage ignored files
+/../../../../../../../:\Documents\C++\TechnoPark\Go\DB-forums\.idea/dataSources/
+/dataSources.local.xml
+# Editor-based HTTP Client requests
+/httpRequests/
+*.exe
+build/
+.idea
+.git
+report.html
+tech-db-forum.best.txt
+tech-db-forum.dat.gz
