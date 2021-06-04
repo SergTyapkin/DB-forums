@@ -1,12 +1,13 @@
-FROM golang:1.15.2-buster AS build
+FROM golang:latest AS builder
 
 RUN mkdir /app
 
-COPY . /app
+ADD . /app
 
 WORKDIR /app
 
-RUN go build -o server main.go
+RUN go build -o main main.go
+
 
 FROM ubuntu:20.04
 
@@ -22,14 +23,13 @@ USER postgres
 # Create a PostgreSQL role named ``docker`` with ``root`` as the password and
 # then create a database `forums` owned by the ``docker`` role.
 RUN /etc/init.d/postgresql start &&\
-    psql --command "CREATE USER docker WITH SUPERUSER PASSWORD 'root';" &&\
-    createdb -E UTF8 forums &&\
+    psql --command "ALTER USER postgres WITH PASSWORD 'TyapkinS_007';" &&\
+    createdb -O postgres DB-forums &&\
     /etc/init.d/postgresql stop
 
-RUN echo "host all  all    0.0.0.0/0  md5" >> /etc/postgresql/$PGVER/main/pg_hba.conf
-
 # Expose the PostgreSQL port
-RUN echo "listen_addresses='*'\nsynchronous_commit = off\nfsync = off\n" >> /etc/postgresql/$PGVER/main/postgresql.conf
+RUN echo "listen_addresses='*'" >> /etc/postgresql/$PGVER/main/postgresql.conf
+RUN echo "host all all 0.0.0.0/0 md5" >> /etc/postgresql/$PGVER/main/pg_hba.conf
 
 EXPOSE 5432
 
@@ -39,11 +39,9 @@ VOLUME ["/etc/postgresql", "/var/log/postgresql", "/var/lib/postgresql"]
 # Back to the root user
 USER root
 
-WORKDIR /usr/src/app
-
 # Собранный сервер
-COPY --from=build /app /app
+COPY --from=builder /app /app
 
 EXPOSE 5000
-ENV PGPASSWORD root
-CMD service postgresql start && psql -h localhost -d forums -U docker -p 5432 -a -q -f ./sql/initial.sql && /app/server
+ENV PGPASSWORD TyapkinS_007
+CMD service postgresql start && psql -h localhost -d DB-forums -U postgres -p 5432 -a -q -f /app/sql/initial.sql && /app/main
