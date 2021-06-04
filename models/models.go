@@ -32,7 +32,7 @@ type Thread struct {
 	Message string    `json:"message"`
 	Title   string    `json:"title"`
 	Votes   int       `json:"votes"`
-	Slug    NullStr    `json:"slug"`
+	Slug    NullStr   `json:"slug"`
 }
 
 type Post struct {
