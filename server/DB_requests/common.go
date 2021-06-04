@@ -1,6 +1,5 @@
 package DB_requests
 
-
 func descToString(desc bool) string {
 	if desc {
 		return "DESC"
