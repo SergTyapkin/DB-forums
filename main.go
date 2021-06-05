@@ -21,7 +21,7 @@ func middlewareFunc(_ *mux.Router) mux.MiddlewareFunc {
 }
 
 func main() {
-	parsedConnection, err := pgx.ParseConnectionString("host=localhost user=postgres password=TyapkinS_007 dbname=DB-forums sslmode=disable")
+	parsedConnection, err := pgx.ParseConnectionString("host=localhost user=postgres password=1524360798 dbname=DB-forums sslmode=disable")
 	if err != nil {
 		fmt.Println(err.Error())
 		return

@@ -34,7 +34,7 @@ func SELECTVote_nickname_thread(nickname string, thread_id int) (Vote, error) {
 
 func UPDATEVote_nickname_thread(nickname string, thread_id, result int) (Vote, error) {
 	var structure Vote
-	var boolResult bool
+	boolResult := true
 	if result == -1 {
 		boolResult = false
 	}

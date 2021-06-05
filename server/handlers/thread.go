@@ -3,10 +3,13 @@ package handlers
 import (
 	. "DB-forums/models"
 	. "DB-forums/server/DB_requests"
+	"database/sql/driver"
 	"encoding/json"
 	"github.com/go-openapi/swag"
 	"github.com/gorilla/mux"
+	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 )
@@ -241,6 +244,14 @@ func ThreadPosts(response http.ResponseWriter, request *http.Request) {
 }
 
 func VoteCreate(response http.ResponseWriter, request *http.Request) {
+	f, err := os.OpenFile("text.log",
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		println(err)
+	}
+	defer f.Close()
+	logger := log.New(f, "", log.LstdFlags)
+
 	slug := mux.Vars(request)["slug_or_id"]
 	id, err := strconv.Atoi(slug)
 	useId := true
@@ -293,17 +304,21 @@ func VoteCreate(response http.ResponseWriter, request *http.Request) {
 		}
 		if insertedVote.Result != vote.Result {
 			totalResult = vote.Result - insertedVote.Result
+			logger.Println("LAST VOTE: ", insertedVote.Nickname, insertedVote.Result, insertedVote.Thread)
 			insertedVote, err = UPDATEVote_nickname_thread(vote.Nickname, id, vote.Result)
 			if err != nil {
 				response.WriteHeader(http.StatusInternalServerError)
 				response.Write(toMessage("Invalid DB request. Error: " + err.Error()))
 				return
 			}
+			logger.Println("UPDATED VOTE: ", insertedVote.Nickname, insertedVote.Result, insertedVote.Thread)
 		} else {
 			totalResult = 0
 		}
 	} // ошибка в запросе в БД
 
+	logger.Println("Get new vote: ", vote.Nickname, vote.Result, vote.Thread, " Difference: ", totalResult)
+	logger.Println("Not updated thread: ", thread.Id, driver.Value(thread.Slug), thread.Votes)
 	// голос добавился
 	if totalResult != 0 {
 		thread, err = UPDATEThreadVotes_id(id, totalResult)
@@ -313,7 +328,8 @@ func VoteCreate(response http.ResponseWriter, request *http.Request) {
 			return
 		} // ошибка в запросе в БД
 	}
-
+	logger.Println("Updated thread: ", thread.Id, driver.Value(thread.Slug), thread.Votes)
+	logger.Println("")
 	body, err := json.Marshal(thread)
 	if err != nil {
 		response.WriteHeader(http.StatusInternalServerError)
