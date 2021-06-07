@@ -54,7 +54,7 @@ CREATE UNLOGGED TABLE IF NOT EXISTS Votes (
     nickname CITEXT,
     result   BOOLEAN,
     thread   INT,
-  
+
     FOREIGN KEY (nickname) REFERENCES Users (nickname),
     FOREIGN KEY (thread) REFERENCES Threads (id),
     UNIQUE(nickname, thread)
@@ -72,26 +72,41 @@ CREATE UNLOGGED TABLE IF NOT EXISTS forums_to_users (
 );
 
 ---------------- Procedures
-CREATE OR REPLACE FUNCTION update_paths_in_post_and_forumsToUsers() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION update_paths_in_post() RETURNS TRIGGER AS $$
 DECLARE
-    author_nickname CITEXT;
-    author_name     TEXT;
-    author_about    TEXT;
-    author_email    CITEXT;
     parent_thread   INT;
+    parent_paths    BIGINT[];
 BEGIN
     -- Update paths in `Posts`
     IF (NEW.parent = 0) THEN
         NEW.paths := array_append(NEW.paths, NEW.id);
     ELSE
-        SELECT thread FROM Posts WHERE id = NEW.parent INTO parent_thread;
+        SELECT thread, paths FROM Posts WHERE id = NEW.parent INTO parent_thread, parent_paths;
         IF (NOT FOUND) OR parent_thread <> NEW.thread THEN
             RAISE EXCEPTION 'Parent post in another thread' USING ERRCODE = '00228';
         END IF;
 
-        NEW.paths := array_append((SELECT paths FROM posts WHERE id = NEW.parent), NEW.id);
+        NEW.paths := array_append(parent_paths, NEW.id);
     END IF;
 
+    RETURN NEW;
+END
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trig_before_insert_posts ON posts;
+CREATE TRIGGER trig_before_insert_posts
+    BEFORE INSERT ON posts
+    FOR EACH ROW
+    EXECUTE PROCEDURE update_paths_in_post();
+
+---------------
+CREATE OR REPLACE FUNCTION update_forumsToUsers() RETURNS TRIGGER AS $$
+DECLARE
+    author_nickname CITEXT;
+    author_name     TEXT;
+    author_about    TEXT;
+    author_email    CITEXT;
+BEGIN
     -- Update forums_to_users
     SELECT nickname, name, about, email
     FROM Users
@@ -106,11 +121,11 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trig_before_insert_posts ON posts;
-CREATE TRIGGER trig_before_insert_posts
-    BEFORE INSERT ON posts
+DROP TRIGGER IF EXISTS trig_after_insert_posts ON posts;
+CREATE TRIGGER trig_after_insert_posts
+    AFTER INSERT ON posts
     FOR EACH ROW
-    EXECUTE PROCEDURE update_paths_in_post_and_forumsToUsers();
+EXECUTE PROCEDURE update_forumsToUsers();
 
 ----------------
 CREATE OR REPLACE FUNCTION update_threads_count_in_forum_and_forumsToUsers() RETURNS TRIGGER AS $$

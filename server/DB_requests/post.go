@@ -2,7 +2,9 @@ package DB_requests
 
 import (
 	. "DB-forums/models"
-	"github.com/go-openapi/swag"
+	"fmt"
+	"github.com/jackc/pgx"
+	"strings"
 )
 
 func SELECTPost_id(id int) (Post, error) {
@@ -19,23 +21,38 @@ func UPDATEPost_id(id int, message string) (Post, error) {
 	return structure, err
 }
 
-func INSERTPost(structureInsert Post) (Post, error) {
-	var structure Post
+func INSERTPosts(structuresInsert []Post, thread int, forum string) ([]Post, error) {
+	var structures []Post
 	var err error
-	if !swag.IsZero(structureInsert.Created) {
+	query := `INSERT INTO Posts(author, created, forum, thread, message, parent) VALUES `
+	var values []interface{}
+	for i, structureInsert := range structuresInsert {
+		base := i * 6
+		query += fmt.Sprintf(`($%d, $%d, $%d, $%d, $%d, $%d), `, base+1, base+2, base+3, base+4, base+5, base+6)
+		values = append(values, structureInsert.Author, structureInsert.Created, forum, thread, structureInsert.Message, structureInsert.Parent)
+	}
+	query = strings.TrimSuffix(query, `, `) + ` RETURNING *;`
 
-		err = DB.QueryRow(`INSERT INTO Posts(author, created, forum, thread, message, parent) VALUES ($1, $2, $3, $4, $5, $6)
-							   RETURNING *;`,
-			structureInsert.Author, structureInsert.Created, structureInsert.Forum, structureInsert.Thread, structureInsert.Message, structureInsert.Parent).
-			Scan(&structure.Id, &structure.Author, &structure.Created, &structure.Forum, &structure.Thread, &structure.Edited, &structure.Message, &structure.Parent, &structure.Paths)
-	} else {
-		err = DB.QueryRow(`INSERT INTO Posts(author, forum, thread, message, parent) VALUES ($1, $2, $3, $4, $5)
-							   RETURNING *;`,
-			structureInsert.Author, structureInsert.Forum, structureInsert.Thread, structureInsert.Message, structureInsert.Parent).
-			Scan(&structure.Id, &structure.Author, &structure.Created, &structure.Forum, &structure.Thread, &structure.Edited, &structure.Message, &structure.Parent, &structure.Paths)
-	}
+	rows, err := DB.Query(query, values...)
 	if err != nil {
-		return structure, err
+		return nil, err
 	}
-	return structure, err
+	defer rows.Close()
+
+	for rows.Next() {
+		var structure Post
+		err = rows.Scan(&structure.Id, &structure.Author, &structure.Created, &structure.Forum, &structure.Thread, &structure.Edited, &structure.Message, &structure.Parent, &structure.Paths)
+		if err != nil {
+			return nil, err
+		}
+		structures = append(structures, structure)
+	}
+
+	if pgErr, ok := rows.Err().(pgx.PgError); ok {
+		if pgErr.Code != "42601" { // Кривой запрос (когда нет записей)
+			return nil, rows.Err()
+		}
+	}
+
+	return structures, err
 }

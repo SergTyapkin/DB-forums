@@ -4,16 +4,13 @@ import (
 	. "DB-forums/models"
 	. "DB-forums/server/DB_requests"
 	"encoding/json"
-	"github.com/go-openapi/swag"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx"
 	"net/http"
 	"strconv"
-	"time"
 )
 
 func PostsCreate(response http.ResponseWriter, request *http.Request) {
-	var nowTime = time.Now()
 	slug := mux.Vars(request)["slug_or_id"]
 	id, err := strconv.Atoi(slug)
 	useId := true
@@ -21,7 +18,7 @@ func PostsCreate(response http.ResponseWriter, request *http.Request) {
 		useId = false
 	}
 
-	var posts, returnedPosts []Post
+	var posts []Post
 	err = json.NewDecoder(request.Body).Decode(&posts)
 	if err != nil {
 		response.WriteHeader(http.StatusBadRequest)
@@ -46,57 +43,46 @@ func PostsCreate(response http.ResponseWriter, request *http.Request) {
 		} // не нашлась ветка
 	}
 
-	for _, post := range posts {
-		post.Thread = thread.Id
-		post.Forum = thread.Forum
-		if swag.IsZero(post.Created) {
-			post.Created = nowTime
-		}
+	// Перенесено в триггер
+	/*
+		if post.Parent != 0 {
+			parentPost, err := SELECTPost_id(post.Parent)
+			if err != nil {
+				response.WriteHeader(http.StatusConflict)
+				response.Write(toMessage("Can't find post with id: " + string(post.Parent)))
+				return
+			} // родительского поста не нашлось
+			if parentPost.Thread != post.Thread {
+				response.WriteHeader(http.StatusConflict)
+				response.Write(toMessage("Parent post is in another thread: " + string(parentPost.Thread)))
+				return
+			} // родительский пост в другой ветке
+		} */
 
-		// Перенесено в триггер
-		/*
-			if post.Parent != 0 {
-				parentPost, err := SELECTPost_id(post.Parent)
-				if err != nil {
-					response.WriteHeader(http.StatusConflict)
-					response.Write(toMessage("Can't find post with id: " + string(post.Parent)))
-					return
-				} // родительского поста не нашлось
-				if parentPost.Thread != post.Thread {
-					response.WriteHeader(http.StatusConflict)
-					response.Write(toMessage("Parent post is in another thread: " + string(parentPost.Thread)))
-					return
-				} // родительский пост в другой ветке
-			} */
+	// Перенесено в триггер
+	/* user, err := SELECTUser_nickname(post.Author)
+	if err != nil {
+		response.WriteHeader(http.StatusNotFound)
+		response.Write(toMessage("Can't find user with id: " + post.Author))
+		return
+	} // пользователя не нашлось */
 
-		// Перенесено в триггер
-		/* user, err := SELECTUser_nickname(post.Author)
-		if err != nil {
-			response.WriteHeader(http.StatusNotFound)
-			response.Write(toMessage("Can't find user with id: " + post.Author))
-			return
-		} // пользователя не нашлось */
-
-		post, err = INSERTPost(post)
-		if err != nil {
-			if pgErr, ok := err.(pgx.PgError); ok {
-				if pgErr.Code == "00228" {
-					response.WriteHeader(http.StatusConflict)
-					response.Write(toMessage("Parent post is in another thread"))
-					return
-				} else {
-					response.WriteHeader(http.StatusNotFound)
-					response.Write(toMessage("Can't find user with current id or Can't find post with current id"))
-					return
-				}
+	posts, err = INSERTPosts(posts, thread.Id, thread.Forum)
+	if err != nil {
+		println(err.Error())
+		if pgErr, ok := err.(pgx.PgError); ok {
+			if pgErr.Code == "00228" {
+				response.WriteHeader(http.StatusConflict)
+				response.Write(toMessage("Parent post is in another thread"))
+			} else {
+				response.WriteHeader(http.StatusNotFound)
+				response.Write(toMessage("Can't find user with current id or Can't find post with current id"))
 			}
-		} // ошибка в запросе в БД
-		// Перенесено в триггер
-		// INSERTForumToUser(thread.Forum, user)
-		returnedPosts = append(returnedPosts, post)
+		}
+		return
 	}
 
-	postsLen := len(returnedPosts)
+	postsLen := len(posts)
 	if postsLen == 0 { // посты не выбрались
 		response.WriteHeader(http.StatusCreated)
 		response.Write([]byte("[]"))
@@ -111,7 +97,7 @@ func PostsCreate(response http.ResponseWriter, request *http.Request) {
 		return
 	} // ошибка в запросе в БД
 
-	body, err := json.Marshal(returnedPosts)
+	body, err := json.Marshal(posts)
 	if err != nil {
 		response.WriteHeader(http.StatusInternalServerError)
 		response.Write(toMessage("Can't marshal JSON file"))
