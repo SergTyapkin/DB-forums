@@ -165,3 +165,6 @@ CREATE INDEX IF NOT EXISTS thread_slug_id_index ON threads (LOWER(forum), create
 CREATE INDEX IF NOT EXISTS thread_created_index ON threads (created);
 
 CREATE INDEX IF NOT EXISTS vote_nickname ON votes (LOWER(nickname), thread);
+
+VACUUM;
+VACUUM ANALYSE;
