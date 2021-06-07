@@ -65,9 +65,9 @@ func SELECTThreadPosts_id(id int, limit int, since, sort string, desc bool) ([]P
 			id, limit)
 	case "parent_tree":
 		rows, err = DB.Query(`SELECT *
-							  FROM Posts WHERE paths[1] IN
-							  (SELECT id FROM posts WHERE thread=$1 AND parent = 0 `+sinceToString("AND paths[1]", ">", "<", "(SELECT paths[1] FROM posts WHERE id = '", since, "')", desc)+` 
-							  ORDER BY id `+descToString(desc)+` LIMIT $2)
+							  FROM Posts
+							  WHERE paths[1] IN (SELECT id FROM posts WHERE thread=$1 AND parent = 0 `+sinceToString("AND paths[1]", ">", "<", "(SELECT paths[1] FROM posts WHERE id = '", since, "')", desc)+` 
+												 ORDER BY id `+descToString(desc)+` LIMIT $2)
 							  ORDER BY paths[1] `+descToString(desc)+`, paths;`,
 			id, limit)
 	default:

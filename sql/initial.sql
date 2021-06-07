@@ -144,27 +144,23 @@ CREATE TRIGGER trig_before_insert_threads
 EXECUTE PROCEDURE update_threads_count_in_forum_and_forumsToUsers();
 
 ---------------- Indexes
-CREATE INDEX IF NOT EXISTS post_id_path1_index ON posts (id, (posts.paths[1]));
-CREATE INDEX IF NOT EXISTS post_thread_id_path1_parent_index ON posts (thread, id, (posts.paths[1]), parent);
-CREATE INDEX IF NOT EXISTS post_thread_path_id_index ON posts (thread, paths, id);
-CREATE INDEX IF NOT EXISTS post_path1_index ON posts ((posts.paths[1]));
-CREATE INDEX IF NOT EXISTS post_thread_id_index ON posts (thread, id);
-CREATE INDEX IF NOT EXISTS post_thread_index ON posts (thread);
+CREATE INDEX IF NOT EXISTS post_path1_paths_index ON posts ((paths[1]), paths);
+CREATE INDEX IF NOT EXISTS post_id_index ON posts (id);
+CREATE INDEX IF NOT EXISTS post_thread_parent_id_index ON posts (thread, parent, id);
+CREATE INDEX IF NOT EXISTS post_thread_path1_parent_id_index ON posts (thread, (paths[1]), parent, id);
+CREATE INDEX IF NOT EXISTS post_thread_paths_index ON posts (thread, paths);
+CREATE INDEX IF NOT EXISTS post_thread_id_created_index ON posts (thread, id, created);
 
-CREATE INDEX IF NOT EXISTS forum_slug_LOWER_index ON forums (LOWER(forums.Slug));
+CREATE INDEX IF NOT EXISTS forum_slug_index ON forums (LOWER(slug));
 
-CREATE INDEX IF NOT EXISTS users_email_nickname_LOWER_index ON users (LOWER(users.email), LOWER(users.nickname));
-CREATE INDEX IF NOT EXISTS users_nickname_index ON users (LOWER(users.nickname));
+CREATE INDEX IF NOT EXISTS users_email_index ON users (LOWER(email));
+CREATE INDEX IF NOT EXISTS users_nickname_index ON users (nickname);
 
-CREATE UNIQUE INDEX IF NOT EXISTS forum_users_unique ON forums_to_users (slug, nickname);
-CLUSTER forums_to_users USING forum_users_unique;
+CREATE UNIQUE INDEX IF NOT EXISTS forum_to_users_unique_index ON forums_to_users (LOWER(slug), nickname);
+CLUSTER forums_to_users USING forum_to_users_unique_index;
 
-CREATE INDEX IF NOT EXISTS thread_forum_LOWER_index ON threads (LOWER(forum));
+CREATE INDEX IF NOT EXISTS thread_id_index ON threads (id);
 CREATE INDEX IF NOT EXISTS thread_slug_index ON threads (LOWER(slug));
-CREATE INDEX IF NOT EXISTS thread_slug_id_index ON threads (LOWER(forum), created);
-CREATE INDEX IF NOT EXISTS thread_created_index ON threads (created);
+CREATE INDEX IF NOT EXISTS thread_forum_created_index ON threads (LOWER(forum), created);
 
-CREATE INDEX IF NOT EXISTS vote_nickname ON votes (LOWER(nickname), thread);
-
-VACUUM;
-VACUUM ANALYSE;
+CREATE INDEX IF NOT EXISTS vote_nickname_thread_index ON votes (nickname, thread);
