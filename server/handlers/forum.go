@@ -16,8 +16,9 @@ func ForumCreate(response http.ResponseWriter, request *http.Request) {
 		response.WriteHeader(http.StatusBadRequest)
 		response.Write(toMessage("Bad request"))
 		return
-	} // раскордировали запрос
+	} // раскодировали запрос
 
+	// Это ради того, чтоб узнать правильный регистр никнейма
 	user, err := SELECTUser_nickname(forum.User)
 	if err != nil {
 		response.WriteHeader(http.StatusNotFound)
@@ -30,10 +31,10 @@ func ForumCreate(response http.ResponseWriter, request *http.Request) {
 	if err != nil { // если форум не добавился
 		forumExisting, err := SELECTForum_slug(forum.Slug)
 		if err != nil {
-			response.WriteHeader(http.StatusInternalServerError)
-			response.Write(toMessage("Invalid DB request. Error: " + err.Error()))
+			response.WriteHeader(http.StatusNotFound)
+			response.Write(toMessage("Can't find user with nickname: " + forum.User))
 			return
-		} // форума такого и нет, значит ошибка в запросе в БД
+		}
 
 		body, err := json.Marshal(forumExisting)
 		if err != nil {
@@ -88,16 +89,19 @@ func ThreadCreate(response http.ResponseWriter, request *http.Request) {
 		response.WriteHeader(http.StatusBadRequest)
 		response.Write(toMessage("Bad request"))
 		return
-	} // раскордировали запрос
+	} // раскодировали запрос
 	thread.Forum = slug
 
-	user, err := SELECTUser_nickname(thread.Author)
-	if err != nil {
-		response.WriteHeader(http.StatusNotFound)
-		response.Write(toMessage("Can't find user with nickname: " + thread.Author))
-		return
-	} // не нашёлся пользователь
+	// Не обязательно. INSERT выдаст эту ошибку
+	/*
+		user, err := SELECTUser_nickname(thread.Author)
+		if err != nil {
+			response.WriteHeader(http.StatusNotFound)
+			response.Write(toMessage("Can't find user with nickname: " + thread.Author))
+			return
+		} // не нашёлся пользователь */
 
+	// НЕ Вынесено в триггер, потому что нужен slug в правильном регистре
 	forum, err := IncrementForumThreads_slug(slug)
 	if err != nil {
 		response.WriteHeader(http.StatusNotFound)
@@ -106,12 +110,12 @@ func ThreadCreate(response http.ResponseWriter, request *http.Request) {
 	} // не нашёлся форум
 	thread.Forum = forum.Slug
 
-	insertedThread, err := INSERTThread(thread)
-	if err != nil { // если ветка не добавилась
+	insertedThread, errInsert := INSERTThread(thread)
+	if errInsert != nil { // если ветка не добавилась
 		structureExisting, err := SELECTThread_slug(thread.Slug.String)
 		if err != nil {
-			response.WriteHeader(http.StatusInternalServerError)
-			response.Write(toMessage("Invalid DB request. Error: " + err.Error()))
+			response.WriteHeader(http.StatusNotFound)
+			response.Write(toMessage("Can't find user with nickname: " + thread.Author + ". Error: " + err.Error()))
 			return
 		} // ветки такой и нет, значит ошибка в запросе в БД
 
@@ -127,7 +131,8 @@ func ThreadCreate(response http.ResponseWriter, request *http.Request) {
 		// такая ветка уже есть
 	}
 
-	INSERTForumToUser(insertedThread.Forum, user)
+	// Вынесено в триггер
+	//INSERTForumToUser(insertedThread.Forum, user)
 	// ветка добавилась
 	body, err := json.Marshal(insertedThread)
 	if err != nil {
@@ -153,6 +158,7 @@ func ForumUsers(response http.ResponseWriter, request *http.Request) {
 		desc = false
 	}
 
+	// SELECT ниже выдаст не ошибку в случае отсутствия форума, а []
 	_, err = SELECTForum_slug(slug)
 	if err != nil {
 		response.WriteHeader(http.StatusNotFound)
@@ -162,8 +168,8 @@ func ForumUsers(response http.ResponseWriter, request *http.Request) {
 
 	users, err := SELECTForumUsers(slug, limit, since, desc)
 	if err != nil {
-		response.WriteHeader(http.StatusInternalServerError)
-		response.Write(toMessage("Invalid DB request. Error: " + err.Error()))
+		response.WriteHeader(http.StatusNotFound)
+		response.Write(toMessage("Invalid DB request: " + err.Error()))
 		return
 	}
 
@@ -199,6 +205,7 @@ func ForumThreads(response http.ResponseWriter, request *http.Request) {
 		desc = false
 	}
 
+	// Оставлено, потому что следующий SELECT при отсутствии форума просто выдаст []
 	forum, err := SELECTForum_slug(slug)
 	if err != nil {
 		response.WriteHeader(http.StatusNotFound)
@@ -209,7 +216,7 @@ func ForumThreads(response http.ResponseWriter, request *http.Request) {
 
 	structs, err := SELECTForumThreads(slug, limit, since, desc)
 	if err != nil {
-		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteHeader(http.StatusNotFound)
 		response.Write(toMessage("Invalid DB request. Error: " + err.Error()))
 		return
 	} // ошибка в запросе в БД

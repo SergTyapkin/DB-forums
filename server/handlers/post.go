@@ -73,9 +73,10 @@ func PostDetails(response http.ResponseWriter, request *http.Request) {
 			response.WriteHeader(http.StatusBadRequest)
 			response.Write(toMessage("Bad request"))
 			return
-		} // раскордировали запрос
+		} // раскодировали запрос
 		message := post.Message
 
+		// Надо вынести в триггер, но он почему-то не сработал.
 		post, err = SELECTPost_id(id)
 		if err != nil {
 			response.WriteHeader(http.StatusNotFound)
@@ -86,13 +87,13 @@ func PostDetails(response http.ResponseWriter, request *http.Request) {
 		if message != "" && message != post.Message {
 			post, err = UPDATEPost_id(id, message)
 			if err != nil {
-				response.WriteHeader(http.StatusInternalServerError)
-				response.Write(toMessage("Invalid DB request. Error: " + err.Error()))
+				response.WriteHeader(http.StatusNotFound)
+				response.Write(toMessage("Can't find post with id: " + string(id) + err.Error()))
 				return
 			} // ошибка в запросе в БД
 		}
 
-		// пост добавился
+		// пост обновился
 		body, err := json.Marshal(post)
 		if err != nil {
 			response.WriteHeader(http.StatusInternalServerError)

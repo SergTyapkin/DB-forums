@@ -81,7 +81,7 @@ func SELECTForumThreads(slug string, limit int, since string, desc bool) ([]Thre
 
 	rows, err = DB.Query(`SELECT *
 							  FROM threads
-							  WHERE forum=$1 `+sinceToString("AND created", ">=", "<=", "'", since, "'", desc)+` 
+							  WHERE LOWER(forum)=LOWER($1) `+sinceToString("AND created", ">=", "<=", "'", since, "'", desc)+` 
 							  ORDER BY created `+descToString(desc)+` LIMIT $2;`,
 		slug, limit)
 	if err != nil {

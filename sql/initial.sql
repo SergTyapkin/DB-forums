@@ -1,13 +1,15 @@
+---------------- Types
 CREATE EXTENSION IF NOT EXISTS citext;
 
-CREATE UNLOGGED TABLE Users (
+---------------- Tables
+CREATE UNLOGGED TABLE IF NOT EXISTS Users (
     nickname CITEXT PRIMARY KEY,
     name     TEXT NOT NULL,
     email    CITEXT UNIQUE,
     about    TEXT
 );
 
-CREATE UNLOGGED TABLE Forums (
+CREATE UNLOGGED TABLE IF NOT EXISTS Forums (
     slug    CITEXT PRIMARY KEY,
     title   TEXT NOT NULL,
     author  CITEXT NOT null,
@@ -17,7 +19,7 @@ CREATE UNLOGGED TABLE Forums (
     FOREIGN KEY (author) REFERENCES Users (nickname)
 );
 
-CREATE UNLOGGED TABLE Threads (
+CREATE UNLOGGED TABLE IF NOT EXISTS Threads (
     id      SERIAL PRIMARY KEY,
     forum   CITEXT NOT NULL,
     author  CITEXT NOT NULL,
@@ -31,7 +33,7 @@ CREATE UNLOGGED TABLE Threads (
     FOREIGN KEY (forum) REFERENCES Forums (slug)
 );
 
-CREATE UNLOGGED TABLE Posts (
+CREATE UNLOGGED TABLE IF NOT EXISTS Posts (
     id      BIGSERIAL PRIMARY KEY,
     author  CITEXT NOT NULL,
     created TIMESTAMP with time zone default now(),
@@ -45,10 +47,10 @@ CREATE UNLOGGED TABLE Posts (
     FOREIGN KEY (author) REFERENCES Users (nickname),
     FOREIGN KEY (forum) REFERENCES Forums (slug),
     FOREIGN KEY (thread) REFERENCES Threads (id)
-    --FOREIGN KEY (parent) REFERENCES Posts (id)
+    --FOREIGN KEY (parent) REFERENCES Posts (id) --parent can be 0
 );
 
-CREATE UNLOGGED TABLE Votes (
+CREATE UNLOGGED TABLE IF NOT EXISTS Votes (
     nickname CITEXT,
     result   BOOLEAN,
     thread   INT,
@@ -58,7 +60,7 @@ CREATE UNLOGGED TABLE Votes (
     UNIQUE(nickname, thread)
 );
 
-CREATE UNLOGGED TABLE forums_to_users (
+CREATE UNLOGGED TABLE IF NOT EXISTS forums_to_users (
     slug     CITEXT NOT NULL,
     nickname CITEXT NOT NULL,
     name     TEXT NOT NULL,
@@ -69,41 +71,97 @@ CREATE UNLOGGED TABLE forums_to_users (
     UNIQUE (nickname, slug)
 );
 
-CREATE OR REPLACE FUNCTION update_paths() RETURNS TRIGGER AS $$
+---------------- Procedures
+CREATE OR REPLACE FUNCTION update_paths_in_post_and_forumsToUsers() RETURNS TRIGGER AS $$
+DECLARE
+    author_nickname CITEXT;
+    author_name     TEXT;
+    author_about    TEXT;
+    author_email    CITEXT;
+    parent_thread   INT;
 BEGIN
+    -- Update paths in `Posts`
     IF (NEW.parent = 0) THEN
         NEW.paths := array_append(NEW.paths, NEW.id);
     ELSE
+        SELECT thread FROM Posts WHERE id = NEW.parent INTO parent_thread;
+        IF (NOT FOUND) OR parent_thread <> NEW.thread THEN
+            RAISE EXCEPTION 'Parent post in another thread' USING ERRCODE = '00228';
+        END IF;
+
         NEW.paths := array_append((SELECT paths FROM posts WHERE id = NEW.parent), NEW.id);
     END IF;
+
+    -- Update forums_to_users
+    SELECT nickname, name, about, email
+    FROM Users
+    WHERE nickname = NEW.author
+    INTO author_nickname, author_name, author_about, author_email;
+
+    INSERT INTO forums_to_users (slug, nickname, name, about, email)
+    VALUES (NEW.forum, author_nickname, author_name, author_about, author_email)
+    ON CONFLICT DO NOTHING;
+
     RETURN NEW;
 END
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trig_update_paths
+DROP TRIGGER IF EXISTS trig_before_insert_posts ON posts;
+CREATE TRIGGER trig_before_insert_posts
     BEFORE INSERT ON posts
     FOR EACH ROW
-    EXECUTE PROCEDURE update_paths();
+    EXECUTE PROCEDURE update_paths_in_post_and_forumsToUsers();
 
+----------------
+CREATE OR REPLACE FUNCTION update_threads_count_in_forum_and_forumsToUsers() RETURNS TRIGGER AS $$
+DECLARE
+    author_nickname CITEXT;
+    author_name     TEXT;
+    author_about    TEXT;
+    author_email    CITEXT;
+BEGIN
+    -- Update threads count in `Forums`
+    -- UPDATE Forums SET threads = (threads + 1) WHERE LOWER(slug)=LOWER(NEW.forum);
 
-CREATE INDEX post_id_path1_index ON posts (id, (posts.paths[1]));
-CREATE INDEX post_thread_id_path1_parent_index ON posts (thread, id, (posts.paths[1]), parent);
-CREATE INDEX post_thread_path_id_index ON posts (thread, paths, id);
-CREATE INDEX post_path1_index ON posts ((posts.paths[1]));
-CREATE INDEX post_thread_id_index ON posts (thread, id);
-CREATE INDEX post_thread_index ON posts (thread);
+    -- Update forums_to_users
+    SELECT nickname, name, about, email
+    FROM Users
+    WHERE nickname = NEW.author
+    INTO author_nickname, author_name, author_about, author_email;
 
-CREATE INDEX forum_slug_LOWER_index ON forums (LOWER(forums.Slug));
+    INSERT INTO forums_to_users (slug, nickname, name, about, email)
+    VALUES (NEW.forum, author_nickname, author_name, author_about, author_email)
+    ON CONFLICT DO NOTHING;
 
-CREATE INDEX users_email_nickname_LOWER_index ON users (LOWER(users.email), LOWER(users.nickname));
-CREATE INDEX users_nickname_index ON users (LOWER(users.nickname));
+    RETURN NEW;
+END
+$$ LANGUAGE plpgsql;
 
-CREATE UNIQUE INDEX forum_users_unique ON forums_to_users (slug, nickname);
+DROP TRIGGER IF EXISTS trig_before_insert_threads ON threads;
+CREATE TRIGGER trig_before_insert_threads
+    BEFORE INSERT ON threads
+    FOR EACH ROW
+EXECUTE PROCEDURE update_threads_count_in_forum_and_forumsToUsers();
+
+---------------- Indexes
+CREATE INDEX IF NOT EXISTS post_id_path1_index ON posts (id, (posts.paths[1]));
+CREATE INDEX IF NOT EXISTS post_thread_id_path1_parent_index ON posts (thread, id, (posts.paths[1]), parent);
+CREATE INDEX IF NOT EXISTS post_thread_path_id_index ON posts (thread, paths, id);
+CREATE INDEX IF NOT EXISTS post_path1_index ON posts ((posts.paths[1]));
+CREATE INDEX IF NOT EXISTS post_thread_id_index ON posts (thread, id);
+CREATE INDEX IF NOT EXISTS post_thread_index ON posts (thread);
+
+CREATE INDEX IF NOT EXISTS forum_slug_LOWER_index ON forums (LOWER(forums.Slug));
+
+CREATE INDEX IF NOT EXISTS users_email_nickname_LOWER_index ON users (LOWER(users.email), LOWER(users.nickname));
+CREATE INDEX IF NOT EXISTS users_nickname_index ON users (LOWER(users.nickname));
+
+CREATE UNIQUE INDEX IF NOT EXISTS forum_users_unique ON forums_to_users (slug, nickname);
 CLUSTER forums_to_users USING forum_users_unique;
 
-CREATE INDEX thread_forum_LOWER_index ON threads (LOWER(forum));
-CREATE INDEX thread_slug_index ON threads (LOWER(slug));
-CREATE INDEX thread_slug_id_index ON threads (LOWER(forum), created);
-CREATE INDEX thread_created_index ON threads (created);
+CREATE INDEX IF NOT EXISTS thread_forum_LOWER_index ON threads (LOWER(forum));
+CREATE INDEX IF NOT EXISTS thread_slug_index ON threads (LOWER(slug));
+CREATE INDEX IF NOT EXISTS thread_slug_id_index ON threads (LOWER(forum), created);
+CREATE INDEX IF NOT EXISTS thread_created_index ON threads (created);
 
-CREATE INDEX vote_nickname ON votes (LOWER(nickname), thread);
+CREATE INDEX IF NOT EXISTS vote_nickname ON votes (LOWER(nickname), thread);

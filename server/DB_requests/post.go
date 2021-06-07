@@ -14,7 +14,7 @@ func SELECTPost_id(id int) (Post, error) {
 
 func UPDATEPost_id(id int, message string) (Post, error) {
 	var structure Post
-	err := DB.QueryRow(`UPDATE Posts SET edited = true`+addIfNotNull("message=", message)+` WHERE id=$1 RETURNING *;`, id).
+	err := DB.QueryRow(`UPDATE Posts SET edited = TRUE`+addIfNotNull(`message = `, message)+` WHERE id=$1 RETURNING *;`, id).
 		Scan(&structure.Id, &structure.Author, &structure.Created, &structure.Forum, &structure.Thread, &structure.Edited, &structure.Message, &structure.Parent, &structure.Paths)
 	return structure, err
 }

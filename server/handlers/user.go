@@ -17,7 +17,7 @@ func UserCreate(response http.ResponseWriter, request *http.Request) {
 		response.WriteHeader(http.StatusBadRequest)
 		response.Write(toMessage("Bad request"))
 		return
-	} // раскордировали запрос
+	} // раскодировали запрос
 	user.Nickname = nickname
 
 	foundedUser, err := INSERTUser(user)
@@ -32,11 +32,12 @@ func UserCreate(response http.ResponseWriter, request *http.Request) {
 			usersExisting = append(usersExisting, foundedUser)
 		}
 		if len(usersExisting) == 0 {
-			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteHeader(http.StatusNotFound)
 			response.Write(toMessage("Invalid DB request. Error: " + err.Error()))
 			return
 		} // пользователя такого и нет, значит ошибка в запросе в БД
 
+		// такой пользователь уже есть
 		body, err := json.Marshal(usersExisting)
 		if err != nil {
 			response.WriteHeader(http.StatusInternalServerError)
@@ -46,9 +47,8 @@ func UserCreate(response http.ResponseWriter, request *http.Request) {
 		response.WriteHeader(http.StatusConflict)
 		response.Write(body)
 		return
-		// такой пользователь уже есть
 	}
-	// пользоваль добавился
+	// пользователь добавился
 	body, err := json.Marshal(foundedUser)
 	if err != nil {
 		response.WriteHeader(http.StatusInternalServerError)
@@ -86,7 +86,7 @@ func UserProfile(response http.ResponseWriter, request *http.Request) {
 			response.WriteHeader(http.StatusBadRequest)
 			response.Write(toMessage("Bad request"))
 			return
-		} // раскордировали запрос
+		} // раскодировали запрос
 		if user.Nickname == "" {
 			user.Nickname = nickname
 		} else if user.Nickname != nickname {
