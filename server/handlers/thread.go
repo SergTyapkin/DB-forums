@@ -5,7 +5,6 @@ import (
 	. "DB-forums/server/DB_requests"
 	"encoding/json"
 	"github.com/gorilla/mux"
-	"github.com/jackc/pgx"
 	"net/http"
 	"strconv"
 )
@@ -43,7 +42,7 @@ func PostsCreate(response http.ResponseWriter, request *http.Request) {
 		} // не нашлась ветка
 	}
 
-	// Перенесено в триггер
+	// Перенесено внутрь INSERTPosts()
 	/*
 		if post.Parent != 0 {
 			parentPost, err := SELECTPost_id(post.Parent)
@@ -70,15 +69,13 @@ func PostsCreate(response http.ResponseWriter, request *http.Request) {
 	posts, err = INSERTPosts(posts, thread.Id, thread.Forum)
 	if err != nil {
 		println(err.Error())
-		if pgErr, ok := err.(pgx.PgError); ok {
-			if pgErr.Code == "00228" {
-				response.WriteHeader(http.StatusConflict)
-				response.Write(toMessage("Parent post is in another thread"))
-			} else {
-				response.WriteHeader(http.StatusNotFound)
-				response.Write(toMessage("Can't find user with current id or Can't find post with current id"))
-			}
+		if err.Error() == "conn is dead" {
+			response.WriteHeader(http.StatusConflict)
+			response.Write(toMessage("Parent post is in another thread"))
+			return
 		}
+		response.WriteHeader(http.StatusNotFound)
+		response.Write(toMessage("Can't find user with current id or Can't find post with current id"))
 		return
 	}
 

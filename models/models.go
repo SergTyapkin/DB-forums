@@ -36,15 +36,22 @@ type Thread struct {
 }
 
 type Post struct {
-	Id      int64            `json:"id"`
-	Author  string           `json:"author"`
-	Created time.Time        `json:"created"`
-	Forum   string           `json:"forum"`
-	Thread  int              `json:"thread"`
-	Edited  bool             `json:"isEdited"`
-	Message string           `json:"message"`
-	Parent  int              `json:"parent"`
-	Paths   pgtype.Int8Array `json:"-"`
+	Id       int64            `json:"id"`
+	Author   string           `json:"author"`
+	Created  time.Time        `json:"created"`
+	Forum    string           `json:"forum"`
+	Thread   int              `json:"thread"`
+	Edited   bool             `json:"isEdited"`
+	Message  string           `json:"message"`
+	Parent   int              `json:"parent"`
+	Paths    pgtype.Int8Array `json:"-"`
+	IntPaths []int            `json:"-"`
+}
+
+type PostForCheck struct {
+	Thread int              `json:"-"`
+	Paths  pgtype.Int8Array `json:"-"`
+	Child  int              `json:"-"`
 }
 
 type Vote struct {
