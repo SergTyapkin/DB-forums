@@ -36,10 +36,10 @@ CREATE UNLOGGED TABLE IF NOT EXISTS Threads (
 CREATE UNLOGGED TABLE IF NOT EXISTS Posts (
     id      BIGSERIAL PRIMARY KEY,
     author  CITEXT NOT NULL,
-    created TIMESTAMP with time zone default now(),
+    created TIMESTAMP with time zone DEFAULT NOW(),
     forum   CITEXT NOT NULL,
     thread  INT,
-    edited  BOOLEAN DEFAULT false,
+    edited  BOOLEAN DEFAULT FALSE,
     message TEXT NOT NULL,
     parent  BIGINT DEFAULT 0,
     paths   BIGINT[] DEFAULT ARRAY []::BIGINT[], --информация о дереве "над" постом
@@ -71,8 +71,7 @@ CREATE UNLOGGED TABLE IF NOT EXISTS forums_to_users (
     UNIQUE (nickname, slug)
 );
 
----------------- Procedures
-/*
+---------------- Trigger Procedures
 CREATE OR REPLACE FUNCTION update_paths_in_post() RETURNS TRIGGER AS $$
 DECLARE
     parent_thread   INT;
@@ -94,15 +93,10 @@ CREATE TRIGGER trig_before_insert_posts
     BEFORE INSERT ON posts
     FOR EACH ROW
     EXECUTE PROCEDURE update_paths_in_post();
-*/
 
 ---------------
-CREATE OR REPLACE FUNCTION update_forumsToUsers() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION update_post_paths_and_forumsToUsers() RETURNS TRIGGER AS $$
 DECLARE
-    author_nickname CITEXT;
-    author_name     TEXT;
-    author_about    TEXT;
-    author_email    CITEXT;
     parent_paths    BIGINT[];
 BEGIN
     -- Update paths in `Posts`
@@ -113,15 +107,14 @@ BEGIN
         NEW.paths := array_append(parent_paths, NEW.id);
     END IF;
 
+    /*
     -- Update forums_to_users
-    SELECT nickname, name, about, email
-    FROM Users
-    WHERE nickname = NEW.author
-    INTO author_nickname, author_name, author_about, author_email;
-
     INSERT INTO forums_to_users (slug, nickname, name, about, email)
-    VALUES (NEW.forum, author_nickname, author_name, author_about, author_email)
+        SELECT NEW.forum, nickname, name, about, email
+        FROM Users
+        WHERE nickname = NEW.author
     ON CONFLICT DO NOTHING;
+     */
 
     RETURN NEW;
 END
@@ -131,27 +124,19 @@ DROP TRIGGER IF EXISTS trig_after_insert_posts ON posts;
 CREATE TRIGGER trig_after_insert_posts
     BEFORE INSERT ON posts
     FOR EACH ROW
-EXECUTE PROCEDURE update_forumsToUsers();
+EXECUTE PROCEDURE update_post_paths_and_forumsToUsers();
 
 ----------------
 CREATE OR REPLACE FUNCTION update_threads_count_in_forum_and_forumsToUsers() RETURNS TRIGGER AS $$
-DECLARE
-    author_nickname CITEXT;
-    author_name     TEXT;
-    author_about    TEXT;
-    author_email    CITEXT;
 BEGIN
     -- Update threads count in `Forums`
     -- UPDATE Forums SET threads = (threads + 1) WHERE LOWER(slug)=LOWER(NEW.forum);
 
     -- Update forums_to_users
-    SELECT nickname, name, about, email
-    FROM Users
-    WHERE nickname = NEW.author
-    INTO author_nickname, author_name, author_about, author_email;
-
     INSERT INTO forums_to_users (slug, nickname, name, about, email)
-    VALUES (NEW.forum, author_nickname, author_name, author_about, author_email)
+        SELECT NEW.forum, nickname, name, about, email
+        FROM Users
+        WHERE nickname = NEW.author
     ON CONFLICT DO NOTHING;
 
     RETURN NEW;

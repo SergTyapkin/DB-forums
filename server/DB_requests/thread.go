@@ -5,9 +5,23 @@ import (
 	"github.com/jackc/pgx"
 )
 
+func SELECTThread_id_tx(id int, tx *pgx.Tx) (Thread, error) {
+	var structure Thread
+	err := tx.QueryRow(`SELECT * FROM Threads WHERE id=$1 LIMIT 1;`, id).
+		Scan(&structure.Id, &structure.Forum, &structure.Author, &structure.Created, &structure.Message, &structure.Title, &structure.Votes, &structure.Slug)
+	return structure, err
+}
+
 func SELECTThread_id(id int) (Thread, error) {
 	var structure Thread
 	err := DB.QueryRow(`SELECT * FROM Threads WHERE id=$1 LIMIT 1;`, id).
+		Scan(&structure.Id, &structure.Forum, &structure.Author, &structure.Created, &structure.Message, &structure.Title, &structure.Votes, &structure.Slug)
+	return structure, err
+}
+
+func SELECTThread_slug_tx(slug string, tx *pgx.Tx) (Thread, error) {
+	var structure Thread
+	err := tx.QueryRow(`SELECT * FROM Threads WHERE LOWER(slug)=LOWER($1) LIMIT 1;`, slug).
 		Scan(&structure.Id, &structure.Forum, &structure.Author, &structure.Created, &structure.Message, &structure.Title, &structure.Votes, &structure.Slug)
 	return structure, err
 }

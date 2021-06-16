@@ -24,64 +24,32 @@ func UPDATEPost_id(id int, message string) (Post, error) {
 func INSERTPosts(postsInsert []Post, thread int, forum string) ([]Post, error) {
 	var posts []Post
 	var err error
-	/*
-		-- Check thread of parent post
-		IF (NEW.parent <> 0) THEN
-		SELECT thread FROM Posts WHERE id = NEW.parent INTO parent_thread;
-		IF (NOT FOUND) OR parent_thread <> NEW.thread THEN
-		RAISE EXCEPTION 'Parent post in another thread' USING ERRCODE = '00228';
-		END IF;
-		END IF;
-	*/
-	querySelect := `SELECT thread FROM Posts WHERE id IN (`
+
+	queryInsertUsers := `INSERT INTO Forums_to_users(slug, nickname, name, about, email)
+						 SELECT '` + forum + `', nickname, name, about, email
+						 FROM Users WHERE nickname IN (`
 	queryInsert := `INSERT INTO Posts(author, created, forum, thread, message, parent) VALUES `
-	var valuesInsert, valuesSelect []interface{}
-	isNeedToCheckParents := false
-	selectIndex := 0
-	selectParentsSet := make(map[int]bool)
-	for i, post := range postsInsert {
-		base := i * 6
-		queryInsert += fmt.Sprintf(`($%d, $%d, $%d, $%d, $%d, $%d), `, base+1, base+2, base+3, base+4, base+5, base+6)
-		valuesInsert = append(valuesInsert, post.Author, post.Created, forum, thread, post.Message, post.Parent)
-		if post.Parent != 0 {
-			isNeedToCheckParents = true
-			if _, ex := selectParentsSet[post.Parent]; !ex { // если такого родителя ещё нет
-				selectParentsSet[post.Parent] = true // добавляем в множество
-				selectIndex += 1
-				querySelect += fmt.Sprintf(`$%d, `, selectIndex)
-				valuesSelect = append(valuesSelect, post.Parent)
-			}
+	var valuesInsert []interface{}
+	authorsSet := make(map[string]bool)
+	base := 0
+	for _, post := range postsInsert {
+		if post.Created.IsZero() {
+			queryInsert += fmt.Sprintf(`($%d, NOW(), $%d, $%d, $%d, $%d), `, base+1, base+2, base+3, base+4, base+5)
+			valuesInsert = append(valuesInsert, post.Author, forum, thread, post.Message, post.Parent)
+			base += 5
+		} else {
+			queryInsert += fmt.Sprintf(`($%d, $%d, $%d, $%d, $%d, $%d), `, base+1, base+2, base+3, base+4, base+5, base+6)
+			valuesInsert = append(valuesInsert, post.Author, post.Created, forum, thread, post.Message, post.Parent)
+			base += 6
+		}
+
+		if _, ex := authorsSet[post.Author]; !ex { // если такого автора ещё нет
+			queryInsertUsers += `'` + post.Author + `', `
+			authorsSet[post.Author] = true
 		}
 	}
 	queryInsert = strings.TrimSuffix(queryInsert, `, `) + ` RETURNING *;`
-
-	// check post parents
-	if isNeedToCheckParents {
-		querySelect = strings.TrimSuffix(querySelect, `, `) + `);`
-
-		rows, err := DB.Query(querySelect, valuesSelect...)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-
-		rowsCount := 0
-		for rows.Next() {
-			var structure PostForCheck
-			err = rows.Scan(&structure.Thread)
-			if err != nil {
-				return nil, err
-			}
-			rowsCount += 1
-			if thread != structure.Thread {
-				return nil, pgx.ErrDeadConn
-			}
-		}
-		//println("Count: ", rowsCount, " vs ", selectIndex)
-		if rowsCount != selectIndex {
-			return nil, pgx.ErrDeadConn
-		}
-	}
+	queryInsertUsers = strings.TrimSuffix(queryInsertUsers, `, `) + `) ON CONFLICT DO NOTHING;`
 
 	// insert posts
 	rows, err := DB.Query(queryInsert, valuesInsert...)
@@ -102,6 +70,14 @@ func INSERTPosts(postsInsert []Post, thread int, forum string) ([]Post, error) {
 	if pgErr, ok := rows.Err().(pgx.PgError); ok {
 		if pgErr.Code != "42601" { // Кривой запрос (когда нет записей)
 			return nil, rows.Err()
+		}
+	}
+
+	// Добавляем в forums_to_users
+	_, err = DB.Exec(queryInsertUsers)
+	if pgErr, ok := err.(pgx.PgError); ok {
+		if pgErr.Code == "42601" { // Кривой запрос (когда нет записей)
+			return posts, nil
 		}
 	}
 

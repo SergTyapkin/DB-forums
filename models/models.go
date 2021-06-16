@@ -48,12 +48,6 @@ type Post struct {
 	IntPaths []int            `json:"-"`
 }
 
-type PostForCheck struct {
-	Thread int              `json:"-"`
-	Paths  pgtype.Int8Array `json:"-"`
-	Child  int              `json:"-"`
-}
-
 type Vote struct {
 	Nickname string `json:"nickname"`
 	Result   int    `json:"voice"`
