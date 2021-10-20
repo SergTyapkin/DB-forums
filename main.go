@@ -61,7 +61,7 @@ func main() {
 
 	router.Use(middlewareFunc(router))
 
-	router.Handle("/api/metrics", promhttp.Handler()).Methods(http.MethodGet)
+	router.Handle("/metrics", promhttp.Handler()).Methods(http.MethodGet)
 	router.HandleFunc("/api/forum/create", handlers.ForumCreate).Methods(http.MethodPost)
 	router.HandleFunc("/api/forum/{slug}/details", handlers.ForumDetails).Methods(http.MethodGet)
 	router.HandleFunc("/api/forum/{slug}/create", handlers.ThreadCreate).Methods(http.MethodPost)
