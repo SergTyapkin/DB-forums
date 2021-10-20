@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"net/http"
 
 	"DB-forums/models"
@@ -9,11 +10,18 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx"
+	"github.com/prometheus/client_golang/prometheus"
 )
+
+var requestsTotal = prometheus.NewCounter(
+	prometheus.CounterOpts{
+		Name: "total_requests",
+	})
 
 func middlewareFunc(_ *mux.Router) mux.MiddlewareFunc {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+			requestsTotal.Inc()
 			response.Header().Set("Content-Type", "application/json")
 			handler.ServeHTTP(response, request)
 		})
@@ -21,6 +29,8 @@ func middlewareFunc(_ *mux.Router) mux.MiddlewareFunc {
 }
 
 func main() {
+	prometheus.MustRegister(requestsTotal)
+
 	parsedConnection, err := pgx.ParseConnectionString("host=localhost user=postgres password=root dbname=DB-forums sslmode=disable")
 	if err != nil {
 		fmt.Println(err.Error())
@@ -51,6 +61,7 @@ func main() {
 
 	router.Use(middlewareFunc(router))
 
+	router.Handle("/metrics", promhttp.Handler()).Methods(http.MethodGet)
 	router.HandleFunc("/api/forum/create", handlers.ForumCreate).Methods(http.MethodPost)
 	router.HandleFunc("/api/forum/{slug}/details", handlers.ForumDetails).Methods(http.MethodGet)
 	router.HandleFunc("/api/forum/{slug}/create", handlers.ThreadCreate).Methods(http.MethodPost)
