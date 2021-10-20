@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"net/http"
 
 	"DB-forums/models"
@@ -11,6 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var requestsTotal = prometheus.NewCounter(
@@ -61,7 +61,7 @@ func main() {
 
 	router.Use(middlewareFunc(router))
 
-	router.Handle("/metrics", promhttp.Handler()).Methods(http.MethodGet)
+	router.Handle("/api/metrics", promhttp.Handler()).Methods(http.MethodGet)
 	router.HandleFunc("/api/forum/create", handlers.ForumCreate).Methods(http.MethodPost)
 	router.HandleFunc("/api/forum/{slug}/details", handlers.ForumDetails).Methods(http.MethodGet)
 	router.HandleFunc("/api/forum/{slug}/create", handlers.ThreadCreate).Methods(http.MethodPost)
